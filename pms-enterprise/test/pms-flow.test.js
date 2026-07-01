@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { createApp } from "../src/app.js";
 
@@ -103,5 +104,12 @@ describe("PMS MVP critical flow", () => {
     assert.throws(() => {
       frontDesk.checkOut(checkIn.stay.id);
     }, /balance must be zero/);
+  });
+});
+
+describe("Frontend shell", () => {
+  it("loads the browser app as an ES module so top-level await can initialize controls", async () => {
+    const html = await readFile(new URL("../src/public/index.html", import.meta.url), "utf8");
+    assert.match(html, /<script type="module" src="\/app\.js"><\/script>/);
   });
 });

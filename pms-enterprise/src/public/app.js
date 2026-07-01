@@ -90,7 +90,7 @@ async function renderReservations() {
   els.reservationList.innerHTML = reservations.length ? reservations.map((reservation) => `
     <article class="card">
       <h3>${reservation.confirmationNumber} - ${reservation.guestName}</h3>
-      <p>${reservation.arrivalDate} a ${reservation.departureDate} · Total USD ${reservation.total.toFixed(2)}</p>
+      <p>${reservation.arrivalDate} a ${reservation.departureDate} - Total USD ${reservation.total.toFixed(2)}</p>
       <span class="status">${reservation.status}</span>
       ${reservation.status === "confirmed" ? `<button data-checkin="${reservation.id}" type="button">Check-in</button>` : ""}
     </article>
@@ -111,7 +111,7 @@ async function renderActiveFolio() {
 }
 
 function renderFolio(folio) {
-  els.folioHint.textContent = `Folio ${folio.id} · Balance USD ${folio.balance.toFixed(2)}`;
+  els.folioHint.textContent = `Folio ${folio.id} - Balance USD ${folio.balance.toFixed(2)}`;
   els.folioDetail.innerHTML = `
     <table>
       <thead><tr><th>Tipo</th><th>Descripcion</th><th>Monto</th></tr></thead>
