@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PMS Enterprise MVP</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">P</span>
+        <div>
+          <strong>PMS Enterprise</strong>
+          <small>MVP Front Desk</small>
+        </div>
+      </div>
+      <nav>
+        <button class="nav active" data-view="availability">Disponibilidad</button>
+        <button class="nav" data-view="reservations">Reservas</button>
+        <button class="nav" data-view="folio">Folio</button>
+      </nav>
+      <section class="operator">
+        <small>Operacion</small>
+        <strong id="propertyName">-</strong>
+        <span id="businessDate">-</span>
+      </section>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <p>Front Desk</p>
+          <h1 id="title">Disponibilidad</h1>
+        </div>
+        <select id="propertySelect"></select>
+      </header>
+
+      <section class="toolbar">
+        <label>
+          Llegada
+          <input id="arrivalDate" type="date" value="2026-07-02" />
+        </label>
+        <label>
+          Salida
+          <input id="departureDate" type="date" value="2026-07-04" />
+        </label>
+        <label>
+          Tipo
+          <select id="roomTypeSelect"></select>
+        </label>
+        <button id="searchAvailability" type="button">Buscar</button>
+      </section>
+
+      <section id="availabilityView" class="view active">
+        <div id="availabilityResults" class="grid"></div>
+      </section>
+
+      <section id="reservationsView" class="view">
+        <form id="reservationForm" class="panel form-grid">
+          <label>
+            Huesped
+            <input id="guestName" required value="Ana Morales" />
+          </label>
+          <label>
+            Email
+            <input id="guestEmail" type="email" value="ana@example.com" />
+          </label>
+          <label>
+            Tarifa
+            <select id="ratePlanSelect"></select>
+          </label>
+          <button type="submit">Crear reserva</button>
+        </form>
+        <div id="reservationList" class="list"></div>
+      </section>
+
+      <section id="folioView" class="view">
+        <div class="panel">
+          <h2>Folio activo</h2>
+          <p id="folioHint">Haga check-in a una reserva para abrir folio.</p>
+          <div id="folioDetail"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
