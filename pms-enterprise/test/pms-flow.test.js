@@ -87,6 +87,34 @@ describe("PMS MVP critical flow", () => {
     }, /No availability/);
   });
 
+  it("allows controlled overbooking for Marina Villa holiday dates", () => {
+    const app = createApp();
+    const { reservations } = app.services;
+
+    for (const guestName of ["Marina Holiday One", "Marina Holiday Two"]) {
+      const reservation = reservations.createReservation({
+        propertyId: "prop_marina",
+        roomTypeId: "rt_marina_villa",
+        ratePlanId: "rp_marina_bar",
+        arrivalDate: "2026-12-24",
+        departureDate: "2026-12-31",
+        guestName
+      });
+      assert.equal(reservation.status, "confirmed");
+    }
+
+    assert.throws(() => {
+      reservations.createReservation({
+        propertyId: "prop_marina",
+        roomTypeId: "rt_marina_villa",
+        ratePlanId: "rp_marina_bar",
+        arrivalDate: "2026-12-24",
+        departureDate: "2026-12-31",
+        guestName: "Marina Holiday Three"
+      });
+    }, /No availability/);
+  });
+
   it("does not allow checkout with an open balance", () => {
     const app = createApp();
     const { reservations, frontDesk } = app.services;

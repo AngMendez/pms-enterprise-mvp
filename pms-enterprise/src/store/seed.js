@@ -57,7 +57,7 @@ export function createSeedData() {
   const inventoryDays = [];
   for (const roomType of roomTypes) {
     const physicalCount = rooms.filter((room) => room.roomTypeId === roomType.id).length;
-    for (const stayDate of eachStayDate("2026-07-01", "2026-08-01")) {
+    for (const stayDate of eachStayDate("2026-07-01", "2027-01-15")) {
       inventoryDays.push({
         id: `inv_${roomType.id}_${stayDate}`,
         propertyId: roomType.propertyId,
@@ -66,7 +66,7 @@ export function createSeedData() {
         physicalCount,
         outOfOrderCount: 0,
         reservedCount: 0,
-        overbookingLimit: 0,
+        overbookingLimit: roomType.id === "rt_marina_villa" ? 1 : 0,
         version: 1
       });
     }
