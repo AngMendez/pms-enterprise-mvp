@@ -25,6 +25,12 @@ export function createRepository(seed = createSeedData()) {
       Object.assign(record, patch);
       return record;
     },
+    deleteWhere(collection, predicate) {
+      const kept = state[collection].filter((item) => !predicate(item));
+      const deletedCount = state[collection].length - kept.length;
+      state[collection] = kept;
+      return deletedCount;
+    },
     next(sequence) {
       const value = state.sequences[sequence];
       state.sequences[sequence] += 1;

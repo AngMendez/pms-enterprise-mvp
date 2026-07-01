@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRuntimeApp } from "./app.js";
+import { openApiDocument } from "./openapi.js";
 
 const app = await createRuntimeApp();
 const publicDir = join(fileURLToPath(new URL(".", import.meta.url)), "public");
@@ -39,7 +40,7 @@ async function sendStatic(req, res) {
 
 async function route(req, res) {
   const url = new URL(req.url, "http://localhost");
-  const { property, inventory, reservations, frontDesk, billing } = app.services;
+  const { property, inventory, reservations, frontDesk, billing, audit } = app.services;
 
   try {
     if (!url.pathname.startsWith("/api")) {
@@ -52,6 +53,11 @@ async function route(req, res) {
         status: "ok",
         storage: app.persistence.enabled ? "postgres" : "memory"
       });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/openapi.json") {
+      sendJson(res, 200, openApiDocument);
       return;
     }
 
@@ -83,6 +89,28 @@ async function route(req, res) {
 
     if (req.method === "GET" && url.pathname === "/api/reservations") {
       sendJson(res, 200, reservations.listReservations(url.searchParams.get("propertyId")));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname.startsWith("/api/reservations/") && !url.pathname.includes("/check-in")) {
+      const reservationId = url.pathname.split("/")[3];
+      sendJson(res, 200, reservations.getReservation(reservationId));
+      return;
+    }
+
+    if (req.method === "PATCH" && url.pathname.startsWith("/api/reservations/")) {
+      const reservationId = url.pathname.split("/")[3];
+      const payload = reservations.updateReservation(reservationId, await parseBody(req));
+      await app.persistence.save();
+      sendJson(res, 200, payload);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname.endsWith("/cancel")) {
+      const reservationId = url.pathname.split("/")[3];
+      const payload = reservations.cancelReservation(reservationId);
+      await app.persistence.save();
+      sendJson(res, 200, payload);
       return;
     }
 
@@ -121,6 +149,11 @@ async function route(req, res) {
       const payload = billing.postTransaction({ folioId, ...(await parseBody(req)) });
       await app.persistence.save();
       sendJson(res, 201, payload);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/audit-events") {
+      sendJson(res, 200, audit.list(url.searchParams.get("propertyId")));
       return;
     }
 

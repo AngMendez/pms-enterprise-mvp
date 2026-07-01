@@ -45,9 +45,18 @@ describe("PMS MVP critical flow", () => {
 
     billing.postTransaction({
       folioId: checkIn.folio.id,
+      transactionType: "charge",
+      description: "Manual minibar charge",
+      amount: 25,
+      sourceModule: "front_desk"
+    });
+    assert.equal(billing.getFolio(checkIn.folio.id).balance, 431.8);
+
+    billing.postTransaction({
+      folioId: checkIn.folio.id,
       transactionType: "payment",
       description: "Tokenized card payment",
-      amount: -406.8,
+      amount: -431.8,
       sourceModule: "front_desk"
     });
 
@@ -85,6 +94,42 @@ describe("PMS MVP critical flow", () => {
         guestName: "Suite Two"
       });
     }, /No availability/);
+  });
+
+  it("modifies and cancels confirmed reservations before check-in", () => {
+    const app = createApp();
+    const { inventory, reservations, audit } = app.services;
+
+    const reservation = reservations.createReservation({
+      propertyId: "prop_playa",
+      roomTypeId: "rt_playa_std",
+      ratePlanId: "rp_playa_bar",
+      arrivalDate: "2026-07-06",
+      departureDate: "2026-07-08",
+      guestName: "Modify Guest"
+    });
+
+    const modified = reservations.updateReservation(reservation.id, {
+      arrivalDate: "2026-07-07",
+      departureDate: "2026-07-09",
+      guestName: "Modified Guest"
+    });
+
+    assert.equal(modified.guestName, "Modified Guest");
+    assert.equal(modified.arrivalDate, "2026-07-07");
+    assert.equal(modified.nights.length, 2);
+
+    const cancelled = reservations.cancelReservation(reservation.id);
+    assert.equal(cancelled.status, "cancelled");
+
+    const released = inventory.getAvailability({
+      propertyId: "prop_playa",
+      roomTypeId: "rt_playa_std",
+      arrivalDate: "2026-07-07",
+      departureDate: "2026-07-09"
+    });
+    assert.equal(released[0].reservedCount, 0);
+    assert.equal(audit.list("prop_playa").some((event) => event.action === "reservation.cancelled"), true);
   });
 
   it("allows controlled overbooking for Marina Villa holiday dates", () => {
@@ -146,5 +191,20 @@ describe("HTTP server", () => {
   it("imports cleanly with memory persistence fallback", async () => {
     const { server } = await import("../src/server.js");
     assert.equal(typeof server.listen, "function");
+  });
+
+  it("serves OpenAPI and health endpoints", async () => {
+    const { server } = await import("../src/server.js");
+    await new Promise((resolve) => server.listen(0, resolve));
+    const { port } = server.address();
+
+    const health = await fetch(`http://localhost:${port}/api/health`).then((response) => response.json());
+    const openapi = await fetch(`http://localhost:${port}/api/openapi.json`).then((response) => response.json());
+
+    assert.equal(health.status, "ok");
+    assert.equal(openapi.openapi, "3.0.3");
+    assert.equal(openapi.paths["/api/reservations/{reservationId}/cancel"].post.summary.includes("Cancel"), true);
+
+    await new Promise((resolve) => server.close(resolve));
   });
 });

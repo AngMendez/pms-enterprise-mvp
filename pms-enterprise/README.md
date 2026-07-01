@@ -57,6 +57,10 @@ La siguiente iteracion deberia reemplazar el repositorio en memoria por PostgreS
 
 Ver [docs/deploy-free.md](docs/deploy-free.md). La opcion recomendada para esta version es Render Free Web Service.
 
+## Validacion Fase 1
+
+Ver [docs/phase-1-validation.md](docs/phase-1-validation.md).
+
 ## Health check
 
 ```text

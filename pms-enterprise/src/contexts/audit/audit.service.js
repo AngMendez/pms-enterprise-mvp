@@ -17,5 +17,11 @@ export function createAuditService(repo) {
     });
   }
 
-  return { record };
+  function list(propertyId = null) {
+    return repo.list("auditEvents")
+      .filter((event) => !propertyId || event.propertyId === propertyId)
+      .toReversed();
+  }
+
+  return { record, list };
 }

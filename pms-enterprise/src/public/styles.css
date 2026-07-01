@@ -160,6 +160,10 @@ label {
   display: block;
 }
 
+.is-hidden {
+  display: none !important;
+}
+
 .panel,
 .card {
   background: var(--surface);

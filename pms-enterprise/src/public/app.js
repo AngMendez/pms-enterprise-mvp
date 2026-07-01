@@ -19,7 +19,10 @@ const els = {
   guestName: document.querySelector("#guestName"),
   guestEmail: document.querySelector("#guestEmail"),
   folioHint: document.querySelector("#folioHint"),
-  folioDetail: document.querySelector("#folioDetail")
+  folioDetail: document.querySelector("#folioDetail"),
+  manualChargeForm: document.querySelector("#manualChargeForm"),
+  manualChargeDescription: document.querySelector("#manualChargeDescription"),
+  manualChargeAmount: document.querySelector("#manualChargeAmount")
 };
 
 async function api(path, options = {}) {
@@ -92,9 +95,33 @@ async function renderReservations() {
       <h3>${reservation.confirmationNumber} - ${reservation.guestName}</h3>
       <p>${reservation.arrivalDate} a ${reservation.departureDate} - Total USD ${reservation.total.toFixed(2)}</p>
       <span class="status">${reservation.status}</span>
-      ${reservation.status === "confirmed" ? `<button data-checkin="${reservation.id}" type="button">Check-in</button>` : ""}
+      ${reservation.status === "confirmed" ? `
+        <button data-checkin="${reservation.id}" type="button">Check-in</button>
+        <button data-modify="${reservation.id}" type="button">Modificar a busqueda actual</button>
+        <button data-cancel="${reservation.id}" type="button">Cancelar</button>
+      ` : ""}
     </article>
   `).join("") : `<div class="panel">No hay reservas para esta propiedad.</div>`;
+}
+
+async function modifyReservation(reservationId) {
+  await api(`/api/reservations/${reservationId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      roomTypeId: els.roomTypeSelect.value,
+      ratePlanId: els.ratePlanSelect.value,
+      arrivalDate: els.arrivalDate.value,
+      departureDate: els.departureDate.value
+    })
+  });
+  await searchAvailability();
+  await renderReservations();
+}
+
+async function cancelReservation(reservationId) {
+  await api(`/api/reservations/${reservationId}/cancel`, { method: "POST", body: "{}" });
+  await searchAvailability();
+  await renderReservations();
 }
 
 async function checkIn(reservationId) {
@@ -112,6 +139,7 @@ async function renderActiveFolio() {
 
 function renderFolio(folio) {
   els.folioHint.textContent = `Folio ${folio.id} - Balance USD ${folio.balance.toFixed(2)}`;
+  els.manualChargeForm.classList.toggle("is-hidden", folio.status !== "open");
   els.folioDetail.innerHTML = `
     <table>
       <thead><tr><th>Tipo</th><th>Descripcion</th><th>Monto</th></tr></thead>
@@ -141,10 +169,26 @@ async function payFolio(folioId) {
   await renderActiveFolio();
 }
 
+async function postManualCharge(event) {
+  event.preventDefault();
+  if (!state.activeFolioId) return;
+  await api(`/api/folios/${state.activeFolioId}/transactions`, {
+    method: "POST",
+    body: JSON.stringify({
+      transactionType: "charge",
+      description: els.manualChargeDescription.value,
+      amount: Number(els.manualChargeAmount.value),
+      sourceModule: "front_desk"
+    })
+  });
+  await renderActiveFolio();
+}
+
 async function checkOut(stayId) {
   await api(`/api/stays/${stayId}/check-out`, { method: "POST", body: "{}" });
   state.activeFolioId = null;
   els.folioHint.textContent = "Check-out completado. Habitacion queda vacant_dirty.";
+  els.manualChargeForm.classList.add("is-hidden");
   els.folioDetail.innerHTML = "";
   await renderReservations();
 }
@@ -161,6 +205,10 @@ document.addEventListener("click", async (event) => {
   if (nav) activate(nav.dataset.view);
   const checkin = event.target.closest("[data-checkin]");
   if (checkin) await checkIn(checkin.dataset.checkin);
+  const modify = event.target.closest("[data-modify]");
+  if (modify) await modifyReservation(modify.dataset.modify);
+  const cancel = event.target.closest("[data-cancel]");
+  if (cancel) await cancelReservation(cancel.dataset.cancel);
   const pay = event.target.closest("[data-pay]");
   if (pay) await payFolio(pay.dataset.pay);
   const checkout = event.target.closest("[data-checkout]");
@@ -173,6 +221,7 @@ els.propertySelect.addEventListener("change", async (event) => {
 });
 document.querySelector("#searchAvailability").addEventListener("click", searchAvailability);
 els.reservationForm.addEventListener("submit", createReservation);
+els.manualChargeForm.addEventListener("submit", postManualCharge);
 
 await loadProperties();
 await loadConfig();

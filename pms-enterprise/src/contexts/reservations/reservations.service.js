@@ -61,6 +61,101 @@ export function createReservationsService(repo, inventory, audit) {
     return getReservation(reservation.id);
   }
 
+  function replaceReservationNights(reservationId, nights) {
+    repo.deleteWhere("reservationNights", (night) => night.reservationId === reservationId);
+    for (const night of nights) {
+      repo.insert("reservationNights", { id: id("night"), reservationId, ...night });
+    }
+  }
+
+  function updateReservation(reservationId, payload) {
+    const current = repo.find("reservations", (item) => item.id === reservationId);
+    if (!current) {
+      const error = new Error("Reservation not found.");
+      error.status = 404;
+      throw error;
+    }
+    if (current.status !== "confirmed") {
+      const error = new Error("Only confirmed reservations can be modified before check-in.");
+      error.status = 409;
+      throw error;
+    }
+
+    const before = structuredClone(current);
+    const next = {
+      ...current,
+      arrivalDate: payload.arrivalDate || current.arrivalDate,
+      departureDate: payload.departureDate || current.departureDate,
+      roomTypeId: payload.roomTypeId || current.roomTypeId,
+      ratePlanId: payload.ratePlanId || current.ratePlanId,
+      adults: payload.adults ?? current.adults,
+      children: payload.children ?? current.children,
+      guestName: payload.guestName || current.guestName,
+      guestEmail: payload.guestEmail ?? current.guestEmail
+    };
+
+    const previousInventory = {
+      propertyId: current.propertyId,
+      roomTypeId: current.roomTypeId,
+      arrivalDate: current.arrivalDate,
+      departureDate: current.departureDate
+    };
+    const nextInventory = {
+      propertyId: next.propertyId,
+      roomTypeId: next.roomTypeId,
+      arrivalDate: next.arrivalDate,
+      departureDate: next.departureDate
+    };
+
+    const nights = quoteNights(next);
+    inventory.release(previousInventory);
+    try {
+      inventory.reserve(nextInventory);
+    } catch (error) {
+      inventory.reserve(previousInventory);
+      throw error;
+    }
+
+    const updated = repo.update("reservations", reservationId, {
+      arrivalDate: next.arrivalDate,
+      departureDate: next.departureDate,
+      roomTypeId: next.roomTypeId,
+      ratePlanId: next.ratePlanId,
+      adults: next.adults,
+      children: next.children,
+      guestName: next.guestName,
+      guestEmail: next.guestEmail,
+      version: current.version + 1
+    });
+    replaceReservationNights(reservationId, nights);
+    audit.record({ propertyId: updated.propertyId, entityType: "reservation", entityId: updated.id, action: "reservation.modified", before, after: structuredClone(updated) });
+    return getReservation(reservationId);
+  }
+
+  function cancelReservation(reservationId) {
+    const reservation = repo.find("reservations", (item) => item.id === reservationId);
+    if (!reservation) {
+      const error = new Error("Reservation not found.");
+      error.status = 404;
+      throw error;
+    }
+    if (!["confirmed", "tentative", "waitlisted"].includes(reservation.status)) {
+      const error = new Error("Reservation cannot be cancelled in its current status.");
+      error.status = 409;
+      throw error;
+    }
+    const before = structuredClone(reservation);
+    inventory.release({
+      propertyId: reservation.propertyId,
+      roomTypeId: reservation.roomTypeId,
+      arrivalDate: reservation.arrivalDate,
+      departureDate: reservation.departureDate
+    });
+    const cancelled = repo.update("reservations", reservationId, { status: "cancelled", version: reservation.version + 1 });
+    audit.record({ propertyId: cancelled.propertyId, entityType: "reservation", entityId: cancelled.id, action: "reservation.cancelled", before, after: structuredClone(cancelled) });
+    return getReservation(reservationId);
+  }
+
   function getReservation(id) {
     const reservation = repo.find("reservations", (item) => item.id === id);
     if (!reservation) {
@@ -79,5 +174,5 @@ export function createReservationsService(repo, inventory, audit) {
       .map((item) => getReservation(item.id));
   }
 
-  return { createReservation, getReservation, listReservations, quoteNights };
+  return { cancelReservation, createReservation, getReservation, listReservations, quoteNights, updateReservation };
 }
