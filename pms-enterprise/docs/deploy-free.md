@@ -23,11 +23,50 @@ La app quedara disponible en una URL similar a:
 https://pms-enterprise-mvp.onrender.com
 ```
 
+## Conectar PostgreSQL
+
+La app usa PostgreSQL automaticamente cuando existe la variable de entorno `DATABASE_URL`.
+
+### Opcion gratuita recomendada para la base
+
+Para un demo gratuito, crea una base PostgreSQL administrada en un proveedor con free tier y copia su connection string. Algunas opciones comunes son Neon, Supabase o Render Postgres si tu cuenta tiene plan disponible.
+
+### Pasos en Render
+
+1. Entra al servicio `pms-enterprise-mvp`.
+2. Abre **Environment**.
+3. Agrega:
+   - Key: `DATABASE_URL`
+   - Value: connection string de PostgreSQL.
+4. Si tu proveedor exige SSL, no agregues nada mas; la app activa SSL automaticamente para URLs no locales.
+5. Redeploy.
+
+Puedes verificar la conexion abriendo:
+
+```text
+https://pms-enterprise-mvp.onrender.com/api/health
+```
+
+Debe responder:
+
+```json
+{
+  "status": "ok",
+  "storage": "postgres"
+}
+```
+
+### Persistencia implementada en el MVP
+
+Esta version guarda el estado completo del MVP en la tabla `pms_app_state` como `jsonb`. Es una decision transicional para conservar reservas, folios e inventario entre reinicios sin reescribir todos los bounded contexts todavia.
+
+El modelo relacional enterprise sigue definido en `docs/schema.sql` y debe convertirse en migraciones reales en la siguiente fase.
+
 ### Limitaciones de la version gratuita
 
 - El servicio puede dormir cuando no recibe trafico y tardar en despertar.
-- El almacenamiento actual es en memoria, por lo que los datos se reinician cuando el proceso reinicia.
-- Para datos persistentes reales se debe migrar a PostgreSQL. Render ofrece PostgreSQL gratuito con limite temporal; para algo estable conviene una base gratuita externa con plan permanente o pasar a un plan pago.
+- Si no configuras `DATABASE_URL`, el almacenamiento vuelve a memoria y los datos se reinician cuando el proceso reinicia.
+- La persistencia JSONB es suficiente para demo, pero no reemplaza el modelo relacional final para operacion real.
 
 ## Alternativas gratuitas
 

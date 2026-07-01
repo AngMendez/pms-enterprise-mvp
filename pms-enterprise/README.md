@@ -13,6 +13,7 @@ MVP funcional para un PMS multi-propiedad, organizado por bounded context y prep
 - Audit trail basico.
 - Frontend operativo para front desk.
 - Tests automatizados del flujo critico.
+- Persistencia opcional en PostgreSQL mediante `DATABASE_URL`.
 
 ## Ejecutar
 
@@ -55,3 +56,11 @@ La siguiente iteracion deberia reemplazar el repositorio en memoria por PostgreS
 ## Despliegue gratuito
 
 Ver [docs/deploy-free.md](docs/deploy-free.md). La opcion recomendada para esta version es Render Free Web Service.
+
+## Health check
+
+```text
+/api/health
+```
+
+Devuelve `storage: "postgres"` cuando `DATABASE_URL` esta configurado; de lo contrario usa `storage: "memory"`.

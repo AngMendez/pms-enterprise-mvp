@@ -141,3 +141,10 @@ describe("Frontend shell", () => {
     assert.match(html, /<script type="module" src="\/app\.js"><\/script>/);
   });
 });
+
+describe("HTTP server", () => {
+  it("imports cleanly with memory persistence fallback", async () => {
+    const { server } = await import("../src/server.js");
+    assert.equal(typeof server.listen, "function");
+  });
+});

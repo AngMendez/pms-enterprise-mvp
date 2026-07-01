@@ -2,9 +2,9 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createApp } from "./app.js";
+import { createRuntimeApp } from "./app.js";
 
-const app = createApp();
+const app = await createRuntimeApp();
 const publicDir = join(fileURLToPath(new URL(".", import.meta.url)), "public");
 
 function sendJson(res, status, payload) {
@@ -47,6 +47,14 @@ async function route(req, res) {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/health") {
+      sendJson(res, 200, {
+        status: "ok",
+        storage: app.persistence.enabled ? "postgres" : "memory"
+      });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/properties") {
       sendJson(res, 200, property.listProperties());
       return;
@@ -79,20 +87,26 @@ async function route(req, res) {
     }
 
     if (req.method === "POST" && url.pathname === "/api/reservations") {
-      sendJson(res, 201, reservations.createReservation(await parseBody(req)));
+      const payload = reservations.createReservation(await parseBody(req));
+      await app.persistence.save();
+      sendJson(res, 201, payload);
       return;
     }
 
     if (req.method === "POST" && url.pathname.endsWith("/check-in")) {
       const reservationId = url.pathname.split("/")[3];
       const body = await parseBody(req);
-      sendJson(res, 200, frontDesk.checkIn(reservationId, body.roomId));
+      const payload = frontDesk.checkIn(reservationId, body.roomId);
+      await app.persistence.save();
+      sendJson(res, 200, payload);
       return;
     }
 
     if (req.method === "POST" && url.pathname.endsWith("/check-out")) {
       const stayId = url.pathname.split("/")[3];
-      sendJson(res, 200, frontDesk.checkOut(stayId));
+      const payload = frontDesk.checkOut(stayId);
+      await app.persistence.save();
+      sendJson(res, 200, payload);
       return;
     }
 
@@ -104,7 +118,9 @@ async function route(req, res) {
 
     if (req.method === "POST" && url.pathname.endsWith("/transactions")) {
       const folioId = url.pathname.split("/")[3];
-      sendJson(res, 201, billing.postTransaction({ folioId, ...(await parseBody(req)) }));
+      const payload = billing.postTransaction({ folioId, ...(await parseBody(req)) });
+      await app.persistence.save();
+      sendJson(res, 201, payload);
       return;
     }
 

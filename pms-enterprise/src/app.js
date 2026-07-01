@@ -4,6 +4,7 @@ import { createFrontDeskService } from "./contexts/front-desk/front-desk.service
 import { createInventoryService } from "./contexts/inventory/inventory.service.js";
 import { createPropertyService } from "./contexts/property/property.service.js";
 import { createReservationsService } from "./contexts/reservations/reservations.service.js";
+import { createPostgresRepository } from "./store/postgres-state.js";
 import { createRepository } from "./store/repository.js";
 
 export function createApp(repo = createRepository()) {
@@ -17,5 +18,13 @@ export function createApp(repo = createRepository()) {
   return {
     repo,
     services: { audit, billing, frontDesk, inventory, property, reservations }
+  };
+}
+
+export async function createRuntimeApp() {
+  const { repo, persistence } = await createPostgresRepository();
+  return {
+    ...createApp(repo),
+    persistence
   };
 }

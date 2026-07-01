@@ -188,3 +188,12 @@ CREATE INDEX idx_inventory_lookup ON inventory_day (property_id, room_type_id, s
 CREATE INDEX idx_reservation_dates ON reservation (property_id, arrival_date, departure_date, status);
 CREATE INDEX idx_folio_txn_business_day ON folio_transaction (property_id, business_date, folio_id);
 CREATE INDEX idx_room_status ON room (property_id, room_type_id, status);
+
+-- Transitional MVP persistence table.
+-- The running demo stores its full application state here while the domain is
+-- migrated from the in-memory repository to the normalized schema above.
+CREATE TABLE pms_app_state (
+  state_key text PRIMARY KEY,
+  data jsonb NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
