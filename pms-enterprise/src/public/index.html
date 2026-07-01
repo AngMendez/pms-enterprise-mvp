@@ -19,6 +19,9 @@
         <button class="nav active" data-view="availability">Disponibilidad</button>
         <button class="nav" data-view="reservations">Reservas</button>
         <button class="nav" data-view="folio">Folio</button>
+        <button class="nav" data-view="audit">Auditoria</button>
+        <button class="nav" data-view="api">API</button>
+        <button class="nav" data-view="phase">Fase 1</button>
       </nav>
       <section class="operator">
         <small>Operacion</small>
@@ -53,10 +56,18 @@
       </section>
 
       <section id="availabilityView" class="view active">
+        <div class="panel intro-panel">
+          <h2>Disponibilidad e inventario</h2>
+          <p>Consulta noches vendibles por propiedad, tipo de habitacion y fechas. El inventario considera reservas existentes y overbooking configurado.</p>
+        </div>
         <div id="availabilityResults" class="grid"></div>
       </section>
 
       <section id="reservationsView" class="view">
+        <div class="panel intro-panel">
+          <h2>Reservas</h2>
+          <p>Crea reservas, modifica fechas usando la busqueda actual, cancela reservas confirmadas y ejecuta check-in.</p>
+        </div>
         <form id="reservationForm" class="panel form-grid">
           <label>
             Huesped
@@ -92,6 +103,30 @@
           </form>
           <div id="folioDetail"></div>
         </div>
+      </section>
+
+      <section id="auditView" class="view">
+        <div class="panel intro-panel">
+          <h2>Audit trail</h2>
+          <p>Eventos inmutables de reservas, estadias, folios y transacciones para la propiedad seleccionada.</p>
+        </div>
+        <div id="auditList" class="list"></div>
+      </section>
+
+      <section id="apiView" class="view">
+        <div class="panel intro-panel">
+          <h2>API REST / OpenAPI</h2>
+          <p>Contrato publicado para integraciones con BI, frontends externos o conectores operativos.</p>
+        </div>
+        <div id="apiSummary" class="list"></div>
+      </section>
+
+      <section id="phaseView" class="view">
+        <div class="panel intro-panel">
+          <h2>Validacion Fase 1</h2>
+          <p>Estado visible de los componentes del MVP acordado.</p>
+        </div>
+        <div id="phaseChecklist" class="checklist"></div>
       </section>
     </main>
 

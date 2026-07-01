@@ -22,7 +22,10 @@ const els = {
   folioDetail: document.querySelector("#folioDetail"),
   manualChargeForm: document.querySelector("#manualChargeForm"),
   manualChargeDescription: document.querySelector("#manualChargeDescription"),
-  manualChargeAmount: document.querySelector("#manualChargeAmount")
+  manualChargeAmount: document.querySelector("#manualChargeAmount"),
+  auditList: document.querySelector("#auditList"),
+  apiSummary: document.querySelector("#apiSummary"),
+  phaseChecklist: document.querySelector("#phaseChecklist")
 };
 
 async function api(path, options = {}) {
@@ -49,6 +52,8 @@ async function loadConfig() {
   els.ratePlanSelect.innerHTML = state.config.ratePlans.map((ratePlan) => `<option value="${ratePlan.id}">${ratePlan.code} - ${ratePlan.name}</option>`).join("");
   await searchAvailability();
   await renderReservations();
+  await renderAudit();
+  renderPhaseChecklist();
 }
 
 async function searchAvailability() {
@@ -104,6 +109,57 @@ async function renderReservations() {
   `).join("") : `<div class="panel">No hay reservas para esta propiedad.</div>`;
 }
 
+async function renderAudit() {
+  const events = await api(`/api/audit-events?propertyId=${state.propertyId}`);
+  els.auditList.innerHTML = events.length ? events.slice(0, 30).map((event) => `
+    <article class="card">
+      <h3>${event.action}</h3>
+      <p>${new Date(event.createdAt).toLocaleString("es-CR")} - ${event.entityType}</p>
+      <span class="status">${event.actor}</span>
+    </article>
+  `).join("") : `<div class="panel">Todavia no hay eventos de auditoria para esta propiedad.</div>`;
+}
+
+async function renderApiSummary() {
+  const doc = await api("/api/openapi.json");
+  const paths = Object.entries(doc.paths);
+  els.apiSummary.innerHTML = `
+    <article class="card">
+      <h3>${doc.info.title}</h3>
+      <p>Version ${doc.info.version} - OpenAPI ${doc.openapi}</p>
+      <a href="/api/openapi.json" target="_blank" rel="noreferrer">Abrir contrato JSON</a>
+    </article>
+    ${paths.map(([path, methods]) => `
+      <article class="card compact-card">
+        <h3>${path}</h3>
+        <p>${Object.keys(methods).map((method) => method.toUpperCase()).join(", ")}</p>
+      </article>
+    `).join("")}
+  `;
+}
+
+function renderPhaseChecklist() {
+  const items = [
+    ["Configuracion de propiedades", "Propiedades, room types, habitaciones y rate plans por propiedad."],
+    ["Disponibilidad", "Busqueda por propiedad, fecha y tipo de habitacion con inventario por noche."],
+    ["Reservas", "Crear, modificar, cancelar, listar y consultar reservas."],
+    ["Front desk", "Check-in con asignacion automatica y check-out con validacion de folio."],
+    ["Folio", "Room charge, impuestos, cargos manuales, pagos y ledger append-only."],
+    ["Auditoria", "Eventos de reserva, folio, transaccion y estadia."],
+    ["API", "Contrato OpenAPI publicado para consumo externo."],
+    ["PostgreSQL", "Persistencia activa cuando /api/health devuelve storage postgres."]
+  ];
+  els.phaseChecklist.innerHTML = items.map(([title, detail]) => `
+    <article class="check-item">
+      <span class="check-mark">OK</span>
+      <div>
+        <h3>${title}</h3>
+        <p>${detail}</p>
+      </div>
+    </article>
+  `).join("");
+}
+
 async function modifyReservation(reservationId) {
   await api(`/api/reservations/${reservationId}`, {
     method: "PATCH",
@@ -116,18 +172,21 @@ async function modifyReservation(reservationId) {
   });
   await searchAvailability();
   await renderReservations();
+  await renderAudit();
 }
 
 async function cancelReservation(reservationId) {
   await api(`/api/reservations/${reservationId}/cancel`, { method: "POST", body: "{}" });
   await searchAvailability();
   await renderReservations();
+  await renderAudit();
 }
 
 async function checkIn(reservationId) {
   const result = await api(`/api/reservations/${reservationId}/check-in`, { method: "POST", body: "{}" });
   state.activeFolioId = result.folio.id;
   await renderReservations();
+  await renderAudit();
   renderFolio(result.folio);
   activate("folio");
 }
@@ -167,6 +226,7 @@ async function payFolio(folioId) {
     })
   });
   await renderActiveFolio();
+  await renderAudit();
 }
 
 async function postManualCharge(event) {
@@ -191,13 +251,24 @@ async function checkOut(stayId) {
   els.manualChargeForm.classList.add("is-hidden");
   els.folioDetail.innerHTML = "";
   await renderReservations();
+  await renderAudit();
 }
 
 function activate(view) {
   document.querySelectorAll(".nav").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
   document.querySelectorAll(".view").forEach((section) => section.classList.remove("active"));
   document.querySelector(`#${view}View`).classList.add("active");
-  els.title.textContent = { availability: "Disponibilidad", reservations: "Reservas", folio: "Folio" }[view];
+  els.title.textContent = {
+    availability: "Disponibilidad",
+    reservations: "Reservas",
+    folio: "Folio",
+    audit: "Auditoria",
+    api: "API",
+    phase: "Fase 1"
+  }[view];
+  if (view === "audit") renderAudit();
+  if (view === "api") renderApiSummary();
+  if (view === "phase") renderPhaseChecklist();
 }
 
 document.addEventListener("click", async (event) => {

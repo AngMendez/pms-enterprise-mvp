@@ -185,6 +185,13 @@ describe("Frontend shell", () => {
     const html = await readFile(new URL("../src/public/index.html", import.meta.url), "utf8");
     assert.match(html, /<script type="module" src="\/app\.js"><\/script>/);
   });
+
+  it("exposes all phase 1 modules in the sidebar navigation", async () => {
+    const html = await readFile(new URL("../src/public/index.html", import.meta.url), "utf8");
+    for (const view of ["availability", "reservations", "folio", "audit", "api", "phase"]) {
+      assert.match(html, new RegExp(`data-view="${view}"`));
+    }
+  });
 });
 
 describe("HTTP server", () => {

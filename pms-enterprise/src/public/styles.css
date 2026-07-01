@@ -172,6 +172,17 @@ label {
   padding: 16px;
 }
 
+.intro-panel {
+  margin-bottom: 14px;
+}
+
+.intro-panel p,
+.card p,
+.check-item p {
+  color: var(--muted);
+  margin-bottom: 0;
+}
+
 .grid,
 .list {
   display: grid;
@@ -184,6 +195,11 @@ label {
 
 .card h3 {
   margin: 0 0 8px;
+}
+
+.compact-card h3 {
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
 }
 
 .card strong {
@@ -204,6 +220,45 @@ label {
 
 .danger {
   color: var(--danger);
+}
+
+.checklist {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.check-item {
+  min-height: 112px;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.check-item h3 {
+  margin: 0 0 6px;
+}
+
+.check-mark {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--success);
+  background: #dff4e9;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+a {
+  color: var(--brand);
+  font-weight: 800;
 }
 
 table {
@@ -229,7 +284,8 @@ td {
 
   .toolbar,
   .form-grid,
-  .grid {
+  .grid,
+  .checklist {
     grid-template-columns: 1fr;
   }
 }
