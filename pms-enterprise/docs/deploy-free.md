@@ -25,7 +25,7 @@ https://pms-enterprise-mvp.onrender.com
 
 ## Conectar PostgreSQL
 
-La app usa PostgreSQL automaticamente cuando existe la variable de entorno `DATABASE_URL`.
+La app usa PostgreSQL automaticamente cuando existe la variable de entorno `DATABASE_URL`. En produccion actualmente debe responder `storage: "postgres"` en `/api/health`.
 
 ### Opcion gratuita recomendada para la base
 
@@ -60,7 +60,7 @@ Debe responder:
 
 Esta version guarda el estado completo del MVP en la tabla `pms_app_state` como `jsonb`. Es una decision transicional para conservar reservas, folios e inventario entre reinicios sin reescribir todos los bounded contexts todavia.
 
-El modelo relacional enterprise sigue definido en `docs/schema.sql` y debe convertirse en migraciones reales en la siguiente fase.
+El modelo relacional enterprise sigue definido en `docs/schema.sql` y debe convertirse en migraciones reales en la siguiente fase. Por eso, "PostgreSQL conectado" ya esta hecho; "PostgreSQL relacional normalizado" sigue pendiente.
 
 ### Limitaciones de la version gratuita
 

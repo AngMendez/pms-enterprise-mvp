@@ -49,9 +49,15 @@ test/
   pms-flow.test.js
 ```
 
+## Estado de persistencia
+
+PostgreSQL ya esta conectado mediante `DATABASE_URL`. En el MVP actual se usa una persistencia transicional: el estado completo de la aplicacion se guarda en la tabla `pms_app_state` como `jsonb`.
+
+Esto resuelve la perdida de datos por reinicios de Render, pero todavia no es la implementacion relacional enterprise final.
+
 ## Siguiente paso recomendado
 
-La siguiente iteracion deberia reemplazar el repositorio en memoria por PostgreSQL, mover los bounded contexts a modulos NestJS y aplicar el SQL versionado como migracion inicial.
+La siguiente iteracion deberia migrar la persistencia transicional `jsonb` al modelo relacional normalizado definido en `docs/schema.sql`, agregar migraciones versionadas y mover los bounded contexts a modulos NestJS/Prisma.
 
 ## Despliegue gratuito
 
