@@ -560,8 +560,7 @@ async function saveState(pool, state) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await deleteAll(client);
-    await insertState(client, state);
+    await upsertState(client, state);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -569,6 +568,263 @@ async function saveState(pool, state) {
   } finally {
     client.release();
   }
+}
+
+async function deleteMissing(client, table, ids) {
+  if (!ids.length) {
+    await client.query(`DELETE FROM ${table}`);
+    return;
+  }
+  await client.query(`DELETE FROM ${table} WHERE NOT (id = ANY($1::text[]))`, [ids]);
+}
+
+async function deleteMissingSequence(client, names) {
+  if (!names.length) {
+    await client.query("DELETE FROM pms_sequence");
+    return;
+  }
+  await client.query("DELETE FROM pms_sequence WHERE NOT (name = ANY($1::text[]))", [names]);
+}
+
+async function bulk(client, sql, rows) {
+  if (!rows.length) return;
+  await client.query(sql, [JSON.stringify(rows)]);
+}
+
+async function upsertState(client, state) {
+  const tables = [
+    ["pms_audit_event", state.auditEvents],
+    ["pms_folio_transaction", state.folioTransactions],
+    ["pms_folio", state.folios],
+    ["pms_room_assignment", state.roomAssignments],
+    ["pms_stay", state.stays],
+    ["pms_reservation_night", state.reservationNights],
+    ["pms_reservation", state.reservations],
+    ["pms_guest", state.guests],
+    ["pms_inventory_day", state.inventoryDays],
+    ["pms_rate_rule", state.rateRules],
+    ["pms_rate_plan", state.ratePlans],
+    ["pms_room", state.rooms],
+    ["pms_room_type", state.roomTypes],
+    ["pms_property", state.properties],
+    ["pms_holding", [state.holding]]
+  ];
+
+  for (const [table, rows] of tables) {
+    await deleteMissing(client, table, rows.map((row) => row.id));
+  }
+  await deleteMissingSequence(client, Object.keys(state.sequences));
+
+  await bulk(client, `
+    INSERT INTO pms_holding (id, name, base_currency)
+    SELECT id, name, base_currency
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, name text, base_currency char(3))
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, base_currency = EXCLUDED.base_currency
+  `, [{ id: state.holding.id, name: state.holding.name, base_currency: state.holding.baseCurrency }]);
+
+  await bulk(client, `
+    INSERT INTO pms_property (id, holding_id, code, name, property_type, timezone, default_currency, business_date)
+    SELECT id, holding_id, code, name, property_type, timezone, default_currency, business_date::date
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, holding_id text, code text, name text, property_type text, timezone text, default_currency char(3), business_date text)
+    ON CONFLICT (id) DO UPDATE SET
+      holding_id = EXCLUDED.holding_id, code = EXCLUDED.code, name = EXCLUDED.name,
+      property_type = EXCLUDED.property_type, timezone = EXCLUDED.timezone,
+      default_currency = EXCLUDED.default_currency, business_date = EXCLUDED.business_date
+  `, state.properties.map((row) => ({
+    id: row.id, holding_id: row.holdingId, code: row.code, name: row.name,
+    property_type: row.propertyType, timezone: row.timezone,
+    default_currency: row.defaultCurrency, business_date: row.businessDate
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_room_type (id, property_id, code, name, max_occupancy, base_adults)
+    SELECT id, property_id, code, name, max_occupancy, base_adults
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, property_id text, code text, name text, max_occupancy int, base_adults int)
+    ON CONFLICT (id) DO UPDATE SET
+      property_id = EXCLUDED.property_id, code = EXCLUDED.code, name = EXCLUDED.name,
+      max_occupancy = EXCLUDED.max_occupancy, base_adults = EXCLUDED.base_adults
+  `, state.roomTypes.map((row) => ({
+    id: row.id, property_id: row.propertyId, code: row.code, name: row.name,
+    max_occupancy: row.maxOccupancy, base_adults: row.baseAdults
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_room (id, property_id, room_type_id, room_number, floor, status, version)
+    SELECT id, property_id, room_type_id, room_number, floor, status, version
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, property_id text, room_type_id text, room_number text, floor text, status text, version int)
+    ON CONFLICT (id) DO UPDATE SET
+      property_id = EXCLUDED.property_id, room_type_id = EXCLUDED.room_type_id,
+      room_number = EXCLUDED.room_number, floor = EXCLUDED.floor,
+      status = EXCLUDED.status, version = EXCLUDED.version
+  `, state.rooms.map((row) => ({
+    id: row.id, property_id: row.propertyId, room_type_id: row.roomTypeId,
+    room_number: row.roomNumber, floor: row.floor, status: row.status, version: row.version
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_rate_plan (id, property_id, code, name, currency)
+    SELECT id, property_id, code, name, currency
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, property_id text, code text, name text, currency char(3))
+    ON CONFLICT (id) DO UPDATE SET
+      property_id = EXCLUDED.property_id, code = EXCLUDED.code, name = EXCLUDED.name, currency = EXCLUDED.currency
+  `, state.ratePlans.map((row) => ({
+    id: row.id, property_id: row.propertyId, code: row.code, name: row.name, currency: row.currency
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_rate_rule (id, rate_plan_id, room_type_id, valid_from, valid_to, amount, tax_rate, min_los, closed_to_arrival, closed_to_departure, stop_sell)
+    SELECT id, rate_plan_id, room_type_id, valid_from::date, valid_to::date, amount, tax_rate, min_los, closed_to_arrival, closed_to_departure, stop_sell
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, rate_plan_id text, room_type_id text, valid_from text, valid_to text, amount numeric, tax_rate numeric, min_los int, closed_to_arrival boolean, closed_to_departure boolean, stop_sell boolean)
+    ON CONFLICT (id) DO UPDATE SET
+      rate_plan_id = EXCLUDED.rate_plan_id, room_type_id = EXCLUDED.room_type_id,
+      valid_from = EXCLUDED.valid_from, valid_to = EXCLUDED.valid_to,
+      amount = EXCLUDED.amount, tax_rate = EXCLUDED.tax_rate, min_los = EXCLUDED.min_los,
+      closed_to_arrival = EXCLUDED.closed_to_arrival, closed_to_departure = EXCLUDED.closed_to_departure,
+      stop_sell = EXCLUDED.stop_sell
+  `, state.rateRules.map((row) => ({
+    id: row.id, rate_plan_id: row.ratePlanId, room_type_id: row.roomTypeId,
+    valid_from: row.validFrom, valid_to: row.validTo, amount: row.amount, tax_rate: row.taxRate,
+    min_los: row.minLos || null, closed_to_arrival: Boolean(row.closedToArrival),
+    closed_to_departure: Boolean(row.closedToDeparture), stop_sell: Boolean(row.stopSell)
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_inventory_day (id, property_id, room_type_id, stay_date, physical_count, out_of_order_count, reserved_count, overbooking_limit, version)
+    SELECT id, property_id, room_type_id, stay_date::date, physical_count, out_of_order_count, reserved_count, overbooking_limit, version
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, property_id text, room_type_id text, stay_date text, physical_count int, out_of_order_count int, reserved_count int, overbooking_limit int, version int)
+    ON CONFLICT (id) DO UPDATE SET
+      property_id = EXCLUDED.property_id, room_type_id = EXCLUDED.room_type_id, stay_date = EXCLUDED.stay_date,
+      physical_count = EXCLUDED.physical_count, out_of_order_count = EXCLUDED.out_of_order_count,
+      reserved_count = EXCLUDED.reserved_count, overbooking_limit = EXCLUDED.overbooking_limit, version = EXCLUDED.version
+  `, state.inventoryDays.map((row) => ({
+    id: row.id, property_id: row.propertyId, room_type_id: row.roomTypeId, stay_date: row.stayDate,
+    physical_count: row.physicalCount, out_of_order_count: row.outOfOrderCount,
+    reserved_count: row.reservedCount, overbooking_limit: row.overbookingLimit, version: row.version
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_guest (id, holding_id, first_name, last_name, email, phone, document_type, document_number, language_code, vip_level, risk_status, gdpr_consent_at, created_at)
+    SELECT id, holding_id, first_name, last_name, email, phone, document_type, document_number, language_code, vip_level, risk_status, gdpr_consent_at::timestamptz, created_at::timestamptz
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, holding_id text, first_name text, last_name text, email text, phone text, document_type text, document_number text, language_code text, vip_level text, risk_status text, gdpr_consent_at text, created_at text)
+    ON CONFLICT (id) DO UPDATE SET
+      holding_id = EXCLUDED.holding_id, first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name,
+      email = EXCLUDED.email, phone = EXCLUDED.phone, document_type = EXCLUDED.document_type,
+      document_number = EXCLUDED.document_number, language_code = EXCLUDED.language_code,
+      vip_level = EXCLUDED.vip_level, risk_status = EXCLUDED.risk_status,
+      gdpr_consent_at = EXCLUDED.gdpr_consent_at, created_at = EXCLUDED.created_at
+  `, state.guests.map((row) => ({
+    id: row.id, holding_id: row.holdingId, first_name: row.firstName, last_name: row.lastName,
+    email: row.email, phone: row.phone, document_type: row.documentType,
+    document_number: row.documentNumber, language_code: row.languageCode,
+    vip_level: row.vipLevel, risk_status: row.riskStatus,
+    gdpr_consent_at: row.gdprConsentAt, created_at: row.createdAt
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_reservation (id, property_id, confirmation_number, status, arrival_date, departure_date, room_type_id, rate_plan_id, source, adults, children, guest_name, guest_email, guarantee_type, version, created_at)
+    SELECT id, property_id, confirmation_number, status, arrival_date::date, departure_date::date, room_type_id, rate_plan_id, source, adults, children, guest_name, guest_email, guarantee_type, version, created_at::timestamptz
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, property_id text, confirmation_number text, status text, arrival_date text, departure_date text, room_type_id text, rate_plan_id text, source text, adults int, children int, guest_name text, guest_email text, guarantee_type text, version int, created_at text)
+    ON CONFLICT (id) DO UPDATE SET
+      property_id = EXCLUDED.property_id, confirmation_number = EXCLUDED.confirmation_number,
+      status = EXCLUDED.status, arrival_date = EXCLUDED.arrival_date, departure_date = EXCLUDED.departure_date,
+      room_type_id = EXCLUDED.room_type_id, rate_plan_id = EXCLUDED.rate_plan_id,
+      source = EXCLUDED.source, adults = EXCLUDED.adults, children = EXCLUDED.children,
+      guest_name = EXCLUDED.guest_name, guest_email = EXCLUDED.guest_email,
+      guarantee_type = EXCLUDED.guarantee_type, version = EXCLUDED.version, created_at = EXCLUDED.created_at
+  `, state.reservations.map((row) => ({
+    id: row.id, property_id: row.propertyId, confirmation_number: row.confirmationNumber,
+    status: row.status, arrival_date: row.arrivalDate, departure_date: row.departureDate,
+    room_type_id: row.roomTypeId, rate_plan_id: row.ratePlanId, source: row.source,
+    adults: row.adults, children: row.children, guest_name: row.guestName,
+    guest_email: row.guestEmail, guarantee_type: row.guaranteeType,
+    version: row.version, created_at: row.createdAt
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_reservation_night (id, reservation_id, stay_date, amount, tax_amount, currency)
+    SELECT id, reservation_id, stay_date::date, amount, tax_amount, currency
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, reservation_id text, stay_date text, amount numeric, tax_amount numeric, currency char(3))
+    ON CONFLICT (id) DO UPDATE SET
+      reservation_id = EXCLUDED.reservation_id, stay_date = EXCLUDED.stay_date,
+      amount = EXCLUDED.amount, tax_amount = EXCLUDED.tax_amount, currency = EXCLUDED.currency
+  `, state.reservationNights.map((row) => ({
+    id: row.id, reservation_id: row.reservationId, stay_date: row.stayDate,
+    amount: row.amount, tax_amount: row.taxAmount, currency: row.currency
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_stay (id, reservation_id, property_id, status, checked_in_at, checked_out_at)
+    SELECT id, reservation_id, property_id, status, checked_in_at::timestamptz, checked_out_at::timestamptz
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, reservation_id text, property_id text, status text, checked_in_at text, checked_out_at text)
+    ON CONFLICT (id) DO UPDATE SET
+      reservation_id = EXCLUDED.reservation_id, property_id = EXCLUDED.property_id,
+      status = EXCLUDED.status, checked_in_at = EXCLUDED.checked_in_at, checked_out_at = EXCLUDED.checked_out_at
+  `, state.stays.map((row) => ({
+    id: row.id, reservation_id: row.reservationId, property_id: row.propertyId,
+    status: row.status, checked_in_at: row.checkedInAt, checked_out_at: row.checkedOutAt
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_room_assignment (id, stay_id, room_id, assigned_from, assigned_to, is_current)
+    SELECT id, stay_id, room_id, assigned_from::date, assigned_to::date, is_current
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, stay_id text, room_id text, assigned_from text, assigned_to text, is_current boolean)
+    ON CONFLICT (id) DO UPDATE SET
+      stay_id = EXCLUDED.stay_id, room_id = EXCLUDED.room_id,
+      assigned_from = EXCLUDED.assigned_from, assigned_to = EXCLUDED.assigned_to, is_current = EXCLUDED.is_current
+  `, state.roomAssignments.map((row) => ({
+    id: row.id, stay_id: row.stayId, room_id: row.roomId,
+    assigned_from: row.assignedFrom, assigned_to: row.assignedTo, is_current: row.isCurrent
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_folio (id, stay_id, property_id, folio_type, status, currency, opened_at, closed_at)
+    SELECT id, stay_id, property_id, folio_type, status, currency, opened_at::timestamptz, closed_at::timestamptz
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, stay_id text, property_id text, folio_type text, status text, currency char(3), opened_at text, closed_at text)
+    ON CONFLICT (id) DO UPDATE SET
+      stay_id = EXCLUDED.stay_id, property_id = EXCLUDED.property_id, folio_type = EXCLUDED.folio_type,
+      status = EXCLUDED.status, currency = EXCLUDED.currency, opened_at = EXCLUDED.opened_at, closed_at = EXCLUDED.closed_at
+  `, state.folios.map((row) => ({
+    id: row.id, stay_id: row.stayId, property_id: row.propertyId, folio_type: row.folioType,
+    status: row.status, currency: row.currency, opened_at: row.openedAt, closed_at: row.closedAt
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_folio_transaction (id, folio_id, property_id, business_date, transaction_type, description, amount, currency, source_module, source_reference, posted_at, voids_transaction_id)
+    SELECT id, folio_id, property_id, business_date::date, transaction_type, description, amount, currency, source_module, source_reference, posted_at::timestamptz, voids_transaction_id
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, folio_id text, property_id text, business_date text, transaction_type text, description text, amount numeric, currency char(3), source_module text, source_reference text, posted_at text, voids_transaction_id text)
+    ON CONFLICT (id) DO UPDATE SET
+      folio_id = EXCLUDED.folio_id, property_id = EXCLUDED.property_id, business_date = EXCLUDED.business_date,
+      transaction_type = EXCLUDED.transaction_type, description = EXCLUDED.description,
+      amount = EXCLUDED.amount, currency = EXCLUDED.currency, source_module = EXCLUDED.source_module,
+      source_reference = EXCLUDED.source_reference, posted_at = EXCLUDED.posted_at,
+      voids_transaction_id = EXCLUDED.voids_transaction_id
+  `, state.folioTransactions.map((row) => ({
+    id: row.id, folio_id: row.folioId, property_id: row.propertyId, business_date: row.businessDate,
+    transaction_type: row.transactionType, description: row.description, amount: row.amount,
+    currency: row.currency, source_module: row.sourceModule, source_reference: row.sourceReference,
+    posted_at: row.postedAt, voids_transaction_id: row.voidsTransactionId
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_audit_event (id, holding_id, property_id, actor, entity_type, entity_id, action, before_data, after_data, created_at)
+    SELECT id, holding_id, property_id, actor, entity_type, entity_id, action, before_data, after_data, created_at::timestamptz
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, holding_id text, property_id text, actor text, entity_type text, entity_id text, action text, before_data jsonb, after_data jsonb, created_at text)
+    ON CONFLICT (id) DO UPDATE SET
+      holding_id = EXCLUDED.holding_id, property_id = EXCLUDED.property_id, actor = EXCLUDED.actor,
+      entity_type = EXCLUDED.entity_type, entity_id = EXCLUDED.entity_id, action = EXCLUDED.action,
+      before_data = EXCLUDED.before_data, after_data = EXCLUDED.after_data, created_at = EXCLUDED.created_at
+  `, state.auditEvents.map((row) => ({
+    id: row.id, holding_id: row.holdingId, property_id: row.propertyId, actor: row.actor,
+    entity_type: row.entityType, entity_id: row.entityId, action: row.action,
+    before_data: row.before, after_data: row.after, created_at: row.createdAt
+  })));
+
+  await bulk(client, `
+    INSERT INTO pms_sequence (name, value)
+    SELECT name, value
+    FROM jsonb_to_recordset($1::jsonb) AS x(name text, value int)
+    ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value
+  `, Object.entries(state.sequences).map(([name, value]) => ({ name, value })));
 }
 
 export async function createPostgresRepository() {
