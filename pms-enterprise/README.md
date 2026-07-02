@@ -51,13 +51,13 @@ test/
 
 ## Estado de persistencia
 
-PostgreSQL ya esta conectado mediante `DATABASE_URL`. En el MVP actual se usa una persistencia transicional: el estado completo de la aplicacion se guarda en la tabla `pms_app_state` como `jsonb`.
+PostgreSQL ya esta conectado mediante `DATABASE_URL`. La persistencia del MVP usa tablas relacionales `pms_*` para propiedades, inventario, reservas, estadias, folios, transacciones, auditoria y secuencias.
 
-Esto resuelve la perdida de datos por reinicios de Render, pero todavia no es la implementacion relacional enterprise final.
+Si la base todavia tiene datos antiguos en `pms_app_state`, el adapter los importa automaticamente hacia las tablas relacionales en el primer arranque.
 
 ## Siguiente paso recomendado
 
-La siguiente iteracion deberia migrar la persistencia transicional `jsonb` al modelo relacional normalizado definido en `docs/schema.sql`, agregar migraciones versionadas y mover los bounded contexts a modulos NestJS/Prisma.
+La siguiente iteracion deberia endurecer el modelo relacional con migraciones versionadas, reemplazar el save completo por repositorios transaccionales por agregado y mover los bounded contexts a modulos NestJS/Prisma.
 
 ## Despliegue gratuito
 
@@ -73,4 +73,4 @@ Ver [docs/phase-1-validation.md](docs/phase-1-validation.md).
 /api/health
 ```
 
-Devuelve `storage: "postgres"` cuando `DATABASE_URL` esta configurado; de lo contrario usa `storage: "memory"`.
+Devuelve `storage: "postgres-relational"` cuando `DATABASE_URL` esta configurado; de lo contrario usa `storage: "memory"`.

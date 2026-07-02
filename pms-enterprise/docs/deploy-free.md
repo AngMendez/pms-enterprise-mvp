@@ -25,7 +25,7 @@ https://pms-enterprise-mvp.onrender.com
 
 ## Conectar PostgreSQL
 
-La app usa PostgreSQL automaticamente cuando existe la variable de entorno `DATABASE_URL`. En produccion actualmente debe responder `storage: "postgres"` en `/api/health`.
+La app usa PostgreSQL automaticamente cuando existe la variable de entorno `DATABASE_URL`. En produccion actualmente debe responder `storage: "postgres-relational"` en `/api/health`.
 
 ### Opcion gratuita recomendada para la base
 
@@ -52,21 +52,21 @@ Debe responder:
 ```json
 {
   "status": "ok",
-  "storage": "postgres"
+  "storage": "postgres-relational"
 }
 ```
 
 ### Persistencia implementada en el MVP
 
-Esta version guarda el estado completo del MVP en la tabla `pms_app_state` como `jsonb`. Es una decision transicional para conservar reservas, folios e inventario entre reinicios sin reescribir todos los bounded contexts todavia.
+Esta version guarda el MVP en tablas relacionales `pms_*`: propiedades, tipos de habitacion, habitaciones, tarifas, inventario por noche, reservas, noches de reserva, estadias, asignaciones, folios, transacciones y auditoria.
 
-El modelo relacional enterprise sigue definido en `docs/schema.sql` y debe convertirse en migraciones reales en la siguiente fase. Por eso, "PostgreSQL conectado" ya esta hecho; "PostgreSQL relacional normalizado" sigue pendiente.
+Si existe la tabla transicional antigua `pms_app_state`, la app importa sus datos automaticamente en el primer arranque con el nuevo adapter. La siguiente fase debe agregar migraciones versionadas y repositorios transaccionales por agregado.
 
 ### Limitaciones de la version gratuita
 
 - El servicio puede dormir cuando no recibe trafico y tardar en despertar.
 - Si no configuras `DATABASE_URL`, el almacenamiento vuelve a memoria y los datos se reinician cuando el proceso reinicia.
-- La persistencia JSONB es suficiente para demo, pero no reemplaza el modelo relacional final para operacion real.
+- El adapter actual guarda el estado completo al finalizar cada operacion de escritura. Es correcto para el MVP, pero en operacion real debe evolucionar a writes transaccionales por agregado.
 
 ## Alternativas gratuitas
 

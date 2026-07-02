@@ -13,13 +13,13 @@
 - Folio append-only con room charge, impuestos, cargos manuales y pagos simulados.
 - Audit trail basico para reservas, folios, transacciones y estadias.
 - API REST con contrato OpenAPI en `/api/openapi.json`.
-- Persistencia PostgreSQL opcional por `DATABASE_URL`.
+- Persistencia PostgreSQL relacional opcional por `DATABASE_URL`.
 - Tests automatizados del flujo critico.
 
 ## Simplificaciones aceptadas para MVP
 
 - No hay autenticacion/RBAC real todavia; queda para endurecimiento previo a uso operativo.
-- La persistencia PostgreSQL guarda estado en `jsonb` como transicion; el modelo relacional enterprise esta definido en `docs/schema.sql`.
+- La persistencia PostgreSQL ya usa tablas relacionales `pms_*`; aun falta endurecerla con migraciones versionadas y repositorios transaccionales por agregado.
 - No hay facturacion electronica, channel manager real, night audit ni housekeeping; corresponden a fases posteriores.
 - El frontend es operativo para demo, pero no reemplaza todavia un tape chart completo de recepcion.
 

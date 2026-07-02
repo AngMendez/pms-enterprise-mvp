@@ -51,7 +51,7 @@ async function route(req, res) {
     if (req.method === "GET" && url.pathname === "/api/health") {
       sendJson(res, 200, {
         status: "ok",
-        storage: app.persistence.enabled ? "postgres" : "memory"
+        storage: app.persistence.mode
       });
       return;
     }
